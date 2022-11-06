@@ -8,7 +8,8 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
   } else {
     cat("Using previously created function index.\n\n")
   }
-  
+#  return(function_index)
+  #print(function_index)
   cat("Running TRACE from : ", entry_point, " in ", entry_file, "\n\n")
   trace <- trace_nf_path( entry_file, entry_point, function_index=function_index)
   
@@ -23,6 +24,7 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
 }
 
 #######  supporting methods #########
+
 
 #######
 # trace the path from a given starting point ( workflow or process )
@@ -79,6 +81,10 @@ format_trace_for_output <- function( trace ){
   return(trace)
 }
 
+
+
+####### PARSING .nf FILES for INCLUDES #########
+
 ###########  
 # check all .nf files in the directory sent and all subdirectories
 # create index of all workflows/processes with callstacks for 
@@ -86,7 +92,7 @@ format_trace_for_output <- function( trace ){
 generate_nf_index <- function( my_directory ){
   
   nf_files <- dir(my_directory, pattern="*\\.nf", recursive=T, full.names=TRUE)# %>% .[grep(".nf$", .)]
-
+#  print(nf_files)
   if ( length(nf_files) == 0 ) 
     stop("The directory sent doesn't have any .nf files to process.")
   
@@ -99,21 +105,41 @@ generate_nf_index <- function( my_directory ){
   
   function_list <- list()
   for ( nf_file in nf_files ){
-    cat(paste("Indexing", nf_file), "\n")
+#    cat(paste("Indexing", nf_file), "\n")
     split_path <- strsplit(nf_file, "/")[[1]]
     processing_filename <- split_path[ length(split_path) ]
     namespace <- ifelse( length(split_path) > 1, split_path[length(split_path)-1], NA )
     fl <- file(nf_file)
     fl_lines <- readLines( fl )
     close(fl)
-    includes <- list()
+    
+    all_includes <- list()
+    my_includes <- list()
+    
     for ( line in fl_lines ) {
       line <- trimws(line, which="left")
-      
       # check for include statment
-      include <- check_for_include(line)
-      if ( all(include != FALSE) ) {
-        includes[ include[1] ] <- include[2]
+#      print(line)
+      this_include <- check_for_include(line)
+      #  this is an include block line
+      if ( length( this_include ) > 1 || this_include == TRUE ) {
+        if ( is.logical(this_include) ) {
+          #multi-line include block ... get next line
+          next
+        }
+        if ( !is.na(this_include[ "actual_name" ]) ) {
+          #theres a new module to be included ...
+          my_includes[ this_include[ "internal_name" ] ] <- this_include[ "actual_name" ]
+        }
+        if ( !is.na(this_include[ "filename" ]) ) {
+          #we've got the full list of modules in this include block
+          #push them onto the all_includes list
+          for ( inc in names(my_includes) ) {
+            all_includes[ inc ] <- paste( this_include[ "filename" ], my_includes[ inc ], sep="__" )
+          }
+#          print(all_includes)
+          my_includes <- list()
+        }
         next
       }
       # check for process or workflow
@@ -129,31 +155,69 @@ generate_nf_index <- function( my_directory ){
       }
       
       # check for call to process or workflow, push onto call stack for the current workflow/process
-      call <- check_for_call( line, includes, processing_filename )
+      call <- check_for_call( line, all_includes, processing_filename )
       if ( is.list( call ) ) {
         function_list[[ length(function_list) ]]$calls %<>% append(list(call))
         next
       }
       
     }
+#    break
   }
   return(function_list)
 }
 #now
 
 
+# include { 
+#   rscript;  
+#   generic_process_1_out as coxph_os_ranks;
+# } from './generic/generic.nf'
+#  value: character vector as [1] internal name used, [2] include-filename__actual-name
+
 check_for_include = function( line ){
-  include <- grep("^include", line, value=TRUE)
-  if ( length(include) ) {
-    name <- gsub("^include[ ]*\\{[ ]*", "", include) %>% gsub("[ ]*\\}.*$", "", .)
-    #may need to handle "AS" here
-    name_qualifier <- strsplit(name, "[ ]+(AS|as)[ ]+")[[1]]
+  
+  module_inclusion = NULL
+  from_file = NULL
+  # 1- include {
+  # 2- include { something } from somewhere.nf
+  # 3- include { something as something_else } from somewhere.nf
+  if ( grepl( "^include[ ]*\\{", line ) ) {
+    #start of include block
+    if ( grepl("\\{[ ]*[a-zA-Z0-9_-]+", line) ) {
+      module_inclusion <- gsub("[^\\{]+\\{[ ]*", "", line) %>% gsub("[ ]*\\}.*$", "", .)
+    } else {
+      #this is an empty include statement ... modules to follow
+      return( TRUE )
+    }
+  # 4- something;
+  # 5- something as something_else;
+  } else if ( grepl( "^[ ]*[a-zA-Z0-9_-]+([ ]+as)|;", line) ) {
+    module_inclusion <- gsub( "^[ ]+", "", line ) %>% gsub("[ ]*;[ ]*", "", . )
+  } 
+  # 6- ... } from somewhere.nf
+  if ( grepl( "\\}[ ]*from", line ) ){
+    from_file <- gsub(".*\\}[ ]*from[ ]+", "", line)  %>% gsub("[ ]+$", "", .)
+  }
+  
+  rtn <- c( actual_name=NA, internal_name=NA, filename=NA )
+  if ( !is.null( module_inclusion ) ) {
+    name_qualifier <- strsplit(module_inclusion, "[ ]+(AS|as)[ ]+")[[1]]
     actual_name <- name_qualifier[1]
     internal_name <- ifelse(length(name_qualifier) > 1, name_qualifier[2], actual_name)
-    include_filename <- strsplit(include, "/") %>% {.[[1]][length(.[[1]])]} %>% gsub("('|\")", "", .)
-    return( c(internal_name, paste(include_filename, actual_name, sep="__") ) )
+    rtn[ "internal_name" ] = internal_name
+    rtn[ "actual_name" ] = actual_name
+  }
+  
+  if ( !is.null( from_file ) ) {
+    include_filename <- strsplit(from_file, "/") %>% {.[[1]][length(.[[1]])]} %>% gsub("('|\")", "", .)
+    rtn[ "filename" ] = include_filename
+  }
+  
+  if ( any(!(is.na( rtn ) )) ){
+    return( rtn )
   } else {
-    return(FALSE)
+    return( FALSE )
   }
 }
 
@@ -189,8 +253,8 @@ library(magrittr)
 ####### init variables #########
 
 root_directory <- getwd()
-entry_file <- "lens.nf"
-entry_point <- "manifest_to_lens" #use main to enter in the "default" or unnamed workflow in entry_file, otherwise use name of workflow
+entry_file <- "main.nf"
+entry_point <- "main" #use main to enter in the "default" or unnamed workflow in entry_file, otherwise use name of workflow
 nf_index <- NA
 run_stats <- FALSE
 
@@ -215,8 +279,13 @@ index_rds_path <- file.path(root_directory, "nf_index.RDS")
 
 if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
 
-fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
+#for some reason it is looking for samtools.nf__gtf_to_genepred but this module doesn't exist
+#  instead gtftogenepred.nf has the gtf_to_genepred method
 
+
+
+fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
+fi$gtf
 # optionally save index to disk
 saveRDS(fi$function_index, index_rds_path)
 
