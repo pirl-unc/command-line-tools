@@ -18,3 +18,6 @@ An index will be saved as an RDS file in the root directory provided. If the ind
 
 The output is the full trace structure to standard output along with a tsv in the root directory named as trace_{workflow}.tsv
 
+LIMITATIONS:
+can only processes single include statements that do not span lines
+( does process "as" includes )
