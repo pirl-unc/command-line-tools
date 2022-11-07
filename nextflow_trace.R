@@ -10,15 +10,19 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
   }
 #  return(function_index)
   #print(function_index)
-  cat("Running TRACE from : ", entry_point, " in ", entry_file, "\n\n")
-  trace <- trace_nf_path( entry_file, entry_point, function_index=function_index)
-  
-  trace %<>% format_trace_for_output()
-  output_file <- file(file.path(root_directory, output_filename))
-  writeLines(trace, output_file)
-  close(output_file)
-  
-  cat("\nTRACE completed, saved to ", file.path(root_directory, output_filename))
+  trace=NULL
+  if ( !is.na(entry_point) && !is.na(entry_file) ) {
+    cat("Running TRACE from : ", entry_point, " in ", entry_file, "\n\n")
+    trace <- trace_nf_path( entry_file, entry_point, function_index=function_index)
+    trace %<>% format_trace_for_output()
+    output_file <- file(file.path(root_directory, output_filename))
+    writeLines(trace, output_file)
+    close(output_file)
+    cat("\nTRACE completed, saved to ", file.path(root_directory, output_filename))
+  } else {
+    cat("No trace starting point sent. Returning NULL.\n")
+  }
+
   
   return(list(function_index=function_index, trace=trace))
 }
@@ -118,8 +122,8 @@ generate_nf_index <- function( my_directory ){
     
     for ( line in fl_lines ) {
       line <- trimws(line, which="left")
+      if ( line == "" | grepl( "^#", line) ) next
       # check for include statment
-#      print(line)
       this_include <- check_for_include(line)
       #  this is an include block line
       if ( length( this_include ) > 1 || this_include == TRUE ) {
@@ -127,9 +131,11 @@ generate_nf_index <- function( my_directory ){
           #multi-line include block ... get next line
           next
         }
-        if ( !is.na(this_include[ "actual_name" ]) ) {
-          #theres a new module to be included ...
-          my_includes[ this_include[ "internal_name" ] ] <- this_include[ "actual_name" ]
+        if ( length(this_include$modules) > 0 ) {
+          #there are new modules to be included ...
+          for ( m in this_include$modules ) {
+            my_includes[ m[ "internal_name" ] ] <- m[ "actual_name" ]
+          }
         }
         if ( !is.na(this_include[ "filename" ]) ) {
           #we've got the full list of modules in this include block
@@ -137,7 +143,6 @@ generate_nf_index <- function( my_directory ){
           for ( inc in names(my_includes) ) {
             all_includes[ inc ] <- paste( this_include[ "filename" ], my_includes[ inc ], sep="__" )
           }
-#          print(all_includes)
           my_includes <- list()
         }
         next
@@ -176,37 +181,44 @@ generate_nf_index <- function( my_directory ){
 #  value: character vector as [1] internal name used, [2] include-filename__actual-name
 
 check_for_include = function( line ){
-  
   module_inclusion = NULL
   from_file = NULL
   # 1- include {
   # 2- include { something } from somewhere.nf
   # 3- include { something as something_else } from somewhere.nf
   if ( grepl( "^include[ ]*\\{", line ) ) {
-    #start of include block
-    if ( grepl("\\{[ ]*[a-zA-Z0-9_-]+", line) ) {
-      module_inclusion <- gsub("[^\\{]+\\{[ ]*", "", line) %>% gsub("[ ]*\\}.*$", "", .)
+    #check if there is a module block on this inclusion line
+    if ( grepl("\\{[\t ]*[a-zA-Z0-9_-]+", line) ) {
+      #strip leading characters / white space
+      module_inclusion <- gsub("[^\\{]+\\{[\t ]*", "", line)
     } else {
       #this is an empty include statement ... modules to follow
       return( TRUE )
     }
   # 4- something;
   # 5- something as something_else;
-  } else if ( grepl( "^[ ]*[a-zA-Z0-9_-]+([ ]+as)|;", line) ) {
-    module_inclusion <- gsub( "^[ ]+", "", line ) %>% gsub("[ ]*;[ ]*", "", . )
-  } 
+  } else if ( grepl( "^[\t ]*[a-zA-Z0-9_-]+([ ]+as)|([ ]*;)", line) ) {
+    #strip off leading spaces or tabs from module statement
+    module_inclusion <- gsub( "^[\t ]*", "", line )
+  }
+  #strip following content from module_inclusion found
+  if ( !is.null(module_inclusion) ) {
+    # strip following ;, } ... 
+    module_inclusion %<>% gsub("[\t ]*\\}.*$", "", .) %>% gsub("[ ]*;$", "", .)
+  }
   # 6- ... } from somewhere.nf
   if ( grepl( "\\}[ ]*from", line ) ){
     from_file <- gsub(".*\\}[ ]*from[ ]+", "", line)  %>% gsub("[ ]+$", "", .)
   }
-  
-  rtn <- c( actual_name=NA, internal_name=NA, filename=NA )
+  rtn <- list( modules=list(), filename=NA )
   if ( !is.null( module_inclusion ) ) {
-    name_qualifier <- strsplit(module_inclusion, "[ ]+(AS|as)[ ]+")[[1]]
-    actual_name <- name_qualifier[1]
-    internal_name <- ifelse(length(name_qualifier) > 1, name_qualifier[2], actual_name)
-    rtn[ "internal_name" ] = internal_name
-    rtn[ "actual_name" ] = actual_name
+    modules <- strsplit(module_inclusion, "[\t ]*;[\t ]*")[[1]]
+    for ( m in modules ) {
+      name_qualifier <- strsplit(m, "[ ]+(AS|as)[ ]+")[[1]]
+      actual_name <- name_qualifier[1]
+      internal_name <- ifelse(length(name_qualifier) > 1, name_qualifier[2], actual_name)
+      rtn$modules[[ length(rtn$modules) +1 ]] <- c( internal_name = internal_name, actual_name = actual_name )
+    }
   }
   
   if ( !is.null( from_file ) ) {
@@ -214,7 +226,7 @@ check_for_include = function( line ){
     rtn[ "filename" ] = include_filename
   }
   
-  if ( any(!(is.na( rtn ) )) ){
+  if ( !is.na( rtn$filename ) || length(rtn$modules) > 0 ){
     return( rtn )
   } else {
     return( FALSE )
@@ -252,7 +264,7 @@ library(magrittr)
 
 ####### init variables #########
 
-root_directory <- getwd()
+root_directory <- file.path(getwd() ) #, "viral")
 entry_file <- "main.nf"
 entry_point <- "main" #use main to enter in the "default" or unnamed workflow in entry_file, otherwise use name of workflow
 nf_index <- NA
@@ -279,13 +291,17 @@ index_rds_path <- file.path(root_directory, "nf_index.RDS")
 
 if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
 
-#for some reason it is looking for samtools.nf__gtf_to_genepred but this module doesn't exist
-#  instead gtftogenepred.nf has the gtf_to_genepred method
 
 
 
-fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
-fi$gtf
+
+# test this on multi-line include data ...
+
+
+
+
+
+fi$function_index$viral.nf__procd_fqs_to_virdetect$calls
 # optionally save index to disk
 saveRDS(fi$function_index, index_rds_path)
 
@@ -296,3 +312,5 @@ if ( run_stats ) {
   length(trace_df$LEVEL_1[trace_df$LEVEL_1 != " "])
 }
 
+fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
+fi$function_index$viral.nf__procd_fqs_to_virdetect$calls
