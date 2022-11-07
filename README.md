@@ -18,6 +18,7 @@ An index will be saved as an RDS file in the root directory provided. If the ind
 
 The output is the full trace structure to standard output along with a tsv in the root directory named as trace_{workflow}.tsv
 
+This script can process includes that are on a single line or spanning multiple lines, and can process the " as " directive.
+
 LIMITATIONS:
-can only processes single include statements that do not span lines
-( does process "as" includes )
+Does not handle templates
