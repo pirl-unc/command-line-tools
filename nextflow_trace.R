@@ -119,10 +119,18 @@ generate_nf_index <- function( my_directory ){
     
     all_includes <- list()
     my_includes <- list()
-    
+    in_script_block <- FALSE
     for ( line in fl_lines ) {
       line <- trimws(line, which="left")
       if ( line == "" | grepl( "^#", line) ) next
+      #skip script blocks
+      if ( grepl("^[\"\']{1,3}[\t ]*$", line) ){
+        in_script_block %<>% !.
+        next
+      } else if ( in_script_block ) {
+        next
+      }
+      
       # check for include statment
       this_include <- check_for_include(line)
       #  this is an include block line
