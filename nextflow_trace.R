@@ -260,6 +260,7 @@ check_for_call = function( line, includes, processing_filename ){
 
 
 ########### functional code - at the end so it can be run from command line and have all methods pre-created #########
+install.packages('magrittr', repos = "http://cran.us.r-project.org")
 library(magrittr)
 
 ####### init variables #########
@@ -291,17 +292,7 @@ index_rds_path <- file.path(root_directory, "nf_index.RDS")
 
 if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
 
-
-
-
-
-# test this on multi-line include data ...
-
-
-
-
-
-fi$function_index$viral.nf__procd_fqs_to_virdetect$calls
+fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
 # optionally save index to disk
 saveRDS(fi$function_index, index_rds_path)
 
@@ -312,5 +303,3 @@ if ( run_stats ) {
   length(trace_df$LEVEL_1[trace_df$LEVEL_1 != " "])
 }
 
-fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
-fi$function_index$viral.nf__procd_fqs_to_virdetect$calls
