@@ -17,8 +17,8 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
     trace %<>% format_trace_for_output()
     if (!is.na(output_file)){
       writeLines(trace, output_file)
+      cat("\nTRACE completed, saved to ", output_file)
     }
-    cat("\nTRACE completed, saved to ", file.path(root_directory, output_filename))
   } else {
     cat("No trace starting point sent. Returning NULL.\n")
   }
@@ -301,9 +301,9 @@ if (length(args) > 0) {
 
 output_filename <- paste("trace",paste0(entry_point, ".tsv"), sep="_" )
 
-index_rds_path <- file.path(root_directory, "nf_index.RDS")
+#index_rds_path <- file.path(root_directory, "nf_index.RDS")
 
-if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
+#if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
 
 
 # still finding a problem parsing some of the files from the nkc project ... 
@@ -312,7 +312,7 @@ if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
 
 fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, file.path(out_directory,output_filename), function_index = nf_index )
 # optionally save index to disk
-saveRDS(fi$function_index, index_rds_path)
+#saveRDS(fi$function_index, index_rds_path)
 
 # optionally run stats on the trace results
 if ( run_stats ) {
