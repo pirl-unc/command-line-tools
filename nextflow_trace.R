@@ -15,9 +15,10 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
     cat("Running TRACE from : ", entry_point, " in ", entry_file, "\n\n")
     trace <- trace_nf_path( entry_file, entry_point, function_index=function_index)
     trace %<>% format_trace_for_output()
-    output_file <- file(file.path(root_directory, output_filename))
-    writeLines(trace, output_file)
-    close(output_file)
+    if (!is.na(output_file)){
+      writeLines(trace, output_file)
+      close(output_file)
+    }
     cat("\nTRACE completed, saved to ", file.path(root_directory, output_filename))
   } else {
     cat("No trace starting point sent. Returning NULL.\n")
@@ -274,6 +275,7 @@ library(magrittr)
 ####### init variables #########
 
 root_directory <- file.path(getwd() ) #, "viral")
+out_directory <- root_directory
 entry_file <- "main.nf"
 entry_point <- "main" #use main to enter in the "default" or unnamed workflow in entry_file, otherwise use name of workflow
 nf_index <- NA
@@ -284,13 +286,14 @@ args = commandArgs(trailingOnly=TRUE)
 
 if (length(args) > 0) {
   root_directory <- args[1]
+  out_directory <- args[2]
   #check directory exists
   if ( !dir.exists(root_directory) ) {
     stop( "The directory sent does not appear to exist." )
   }
-  if (length(args) >= 3) {
-    entry_file <- args[2]
-    entry_point <- args[3]
+  if (length(args) >= 4) {
+    entry_file <- args[3]
+    entry_point <- args[4]
   }
 }
 
@@ -305,7 +308,7 @@ if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
 
 
 
-fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
+fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, file.path(out_directory,output_filename), function_index = nf_index )
 # optionally save index to disk
 saveRDS(fi$function_index, index_rds_path)
 
