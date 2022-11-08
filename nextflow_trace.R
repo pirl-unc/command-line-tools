@@ -17,7 +17,6 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
     trace %<>% format_trace_for_output()
     if (!is.na(output_file)){
       writeLines(trace, output_file)
-      close(output_file)
     }
     cat("\nTRACE completed, saved to ", file.path(root_directory, output_filename))
   } else {
@@ -269,7 +268,10 @@ check_for_call = function( line, includes, processing_filename ){
 
 
 ########### functional code - at the end so it can be run from command line and have all methods pre-created #########
-install.packages('magrittr', repos = "http://cran.us.r-project.org")
+
+if ("magrittr" %in% rownames(installed.packages()) == FALSE) {
+  install.packages('magrittr', repos = "http://cran.us.r-project.org")
+}
 library(magrittr)
 
 ####### init variables #########
