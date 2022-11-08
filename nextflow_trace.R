@@ -258,7 +258,7 @@ check_for_call = function( line, includes, processing_filename ){
   if ( length(call) ) {
     call_name <- gsub( "[ ]*\\(.*$", "", call )
     #there are a few calls that we might catch which aren't actually calls - exclude them here ...
-    if( call_name %in% c("path", "val", "tuple", "if") ) return(FALSE)
+    if( call_name %in% c("path", "val", "tuple", "if", "evaluate") ) return(FALSE)
     # find this call in includes, or if not there, append current filename since we know it must be in this namespace
     qualified_name <- ifelse( call_name %in% names(includes), includes[[ call_name ]], paste( processing_filename, call_name, sep="__") )
     return( list( internal_name=call_name, qualified_name=qualified_name ) )
@@ -299,6 +299,11 @@ output_filename <- paste("trace",paste0(entry_point, ".tsv"), sep="_" )
 index_rds_path <- file.path(root_directory, "nf_index.RDS")
 
 if ( file.exists( index_rds_path ) ) nf_index <- readRDS(index_rds_path)
+
+
+# still finding a problem parsing some of the files from the nkc project ... 
+
+
 
 fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, output_file, function_index = nf_index )
 # optionally save index to disk
