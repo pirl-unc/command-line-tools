@@ -17,7 +17,7 @@ generate_index_and_run_trace = function( root_directory, entry_point, entry_file
     trace %<>% format_trace_for_output()
     if (!is.na(output_file)){
       writeLines(trace, output_file)
-      cat("\nTRACE completed, saved to ", output_file)
+      cat("\nTRACE completed, saved to ", output_file, ".\n")
     }
   } else {
     cat("No trace starting point sent. Returning NULL.\n")
