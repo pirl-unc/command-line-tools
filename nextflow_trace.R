@@ -85,8 +85,10 @@ format_trace_for_output <- function( trace ){
   return(trace)
 }
 
-
-
+a <- function( v ){
+  index_output <<- c(index_output, v)
+  cat(v)
+}
 ####### PARSING .nf FILES for INCLUDES #########
 
 ###########  
@@ -106,12 +108,15 @@ generate_nf_index <- function( my_directory ){
     stop("The following filenames are duplicated ... sorry, this script won't work properly::\n", nf_files[duplicated(names_only)])
   
   #generate index of all nf functions ( processes and workflows )
-  
+  index_output <<- c()
   function_list <- list()
   for ( nf_file in nf_files ){
 #    cat(paste("Indexing", nf_file), "\n")
     split_path <- strsplit(nf_file, "/")[[1]]
     processing_filename <- split_path[ length(split_path) ]
+    
+    a(paste0("\nProcessing FILE :: ", processing_filename, "\n"))
+    
     namespace <- ifelse( length(split_path) > 1, split_path[length(split_path)-1], NA )
     fl <- file(nf_file)
     fl_lines <- readLines( fl )
@@ -149,6 +154,9 @@ generate_nf_index <- function( my_directory ){
           #we've got the full list of modules in this include block
           #push them onto the all_includes list
           for ( inc in names(my_includes) ) {
+            
+            a(paste0("INCLUDE ::", paste( my_includes[ inc ], this_include[ "filename" ], sep=" from " ),"\n"))
+            
             all_includes[ inc ] <- paste( this_include[ "filename" ], my_includes[ inc ], sep="__" )
           }
           my_includes <- list()
@@ -159,8 +167,11 @@ generate_nf_index <- function( my_directory ){
       process <- check_for_process_or_workflow(line, processing_filename)
       if ( is.list(process) ) {
         qualified_process <- paste( process$file, process$name, sep="__" )
+        
+        a(paste("Found PROCESS ::", process$name, "\n"))
+        
         if( qualified_process %in% names(function_list) ){
-          warning("process :: ", processing_filename, "::", process, " exists in another namespace ( from ", function_list[[qualified_process]]$file, " )")
+          warning("PROCESS/WORKFLOW :: ", processing_filename, "::", process, " exists in another namespace ( from ", function_list[[qualified_process]]$file, " )")
         } else {
           function_list[[ qualified_process ]] <- process
         }
@@ -170,6 +181,9 @@ generate_nf_index <- function( my_directory ){
       # check for call to process or workflow, push onto call stack for the current workflow/process
       call <- check_for_call( line, all_includes, processing_filename )
       if ( is.list( call ) ) {
+        
+        a(paste("\tcalls ::", call[[1]], "\n"))
+
         function_list[[ length(function_list) ]]$calls %<>% append(list(call))
         next
       }
@@ -278,8 +292,8 @@ library(magrittr)
 
 root_directory <- file.path(getwd() ) #, "viral")
 out_directory <- root_directory
-entry_file <- "main.nf"
-entry_point <- "main" #use main to enter in the "default" or unnamed workflow in entry_file, otherwise use name of workflow
+entry_file <- NA #"main.nf"
+entry_point <- NA #"main" #use main to enter in the "default" or unnamed workflow in entry_file, otherwise use name of workflow
 nf_index <- NA
 run_stats <- FALSE
 
@@ -309,8 +323,12 @@ output_filename <- paste("trace",paste0(entry_point, ".tsv"), sep="_" )
 # still finding a problem parsing some of the files from the nkc project ... 
 
 
-
+index_output <- c()
 fi <- generate_index_and_run_trace( root_directory, entry_point, entry_file, file.path(out_directory,output_filename), function_index = nf_index )
+
+### save index output to trace annotation file ...
+
+
 # optionally save index to disk
 #saveRDS(fi$function_index, index_rds_path)
 
