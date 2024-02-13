@@ -1,4 +1,7 @@
 # command_line_tools
+
+* this package was initially hosted at https://github.com/Benjamin-Vincent-Lab/command_line_tools and was moved here on 2/13/2024
+
 Tools helpful for working with data, nextflow, etc.
 
 
